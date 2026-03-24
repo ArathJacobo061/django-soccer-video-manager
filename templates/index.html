@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro-Gol Watch — Subir Videos</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+</head>
+<body>
+
+<!-- ── Encabezado ───────────────────────────────────── -->
+<header>
+<img src="/static/css/logo.jpeg" alt="Pro-Gol Watch" 
+     style="width: 60px; height: 60px; object-fit: cover; border-radius: 8%; border: 3px solid #e8e8e9;">
+         
+    <div>
+        <h1>Pro-Gol Watch</h1>
+        <p>Sistema de gestión de videos futbolísticos</p>
+    </div>
+</header>
+
+<!-- ── Contenido principal ──────────────────────────── -->
+<div class="container">
+
+    {% if error %}
+    <div class="alerta-error">❌ {{ error }}</div>
+    {% endif %}
+
+    <!-- Formulario de datos del usuario -->
+    <form method="POST" action="{% url 'guardar' %}" id="formulario">
+        {% csrf_token %}
+
+        <!-- SECCIÓN 1: Datos del usuario -->
+        <div class="card">
+            <h2><i class="bi bi-person-plus-fill" style="color: #8132ff;"></i> Datos del usuario</h2>
+
+            <div class="form-group">
+                <label for="id_nomina">Número de nómina</label>
+                <input type="text" id="id_nomina" name="id_nomina"
+                       placeholder="Ej: N087545" maxlength="10">
+                <span class="msg-error" id="err_nomina">
+                    Nómina en formato incorrecto. Debe capturar solo números y letras.
+                </span>
+            </div>
+
+            <div class="form-group">
+                <label for="nombre">Nombre completo</label>
+                <input type="text" id="nombre" name="nombre"
+                       placeholder="Ej: Luis Santoy">
+                <span class="msg-error" id="err_nombre">
+                    Nombre de usuario en formato incorrecto. Debe capturar solo letras.
+                </span>
+            </div>
+
+            <div class="form-group">
+                <label for="cantidad">Cantidad de videos a subir</label>
+                <input type="text" id="cantidad" name="cantidad"
+                       placeholder="Ej: 3" maxlength="2">
+                <span class="msg-error" id="err_cantidad">
+                    Cantidad de videos en formato incorrecto. Debe capturar solo números.
+                </span>
+            </div>
+
+            <!-- Botón Aceptar: abre el modal de confirmación -->
+            
+            <button type="button" class="btn btn-verde" onclick="abrirModal()">
+              <i class="bi bi-check-circle-fill" style="font-size: 1.5rem; display: block; margin-bottom: 4px;"></i>
+                Aceptar
+            </button>
+
+        </div>
+
+        <!-- SECCIÓN 2: Videos (aparece tras confirmar) -->
+        <div id="seccion-videos">
+            <div id="contenedor-videos"></div>
+
+            <!-- Botón Guardar: envía el formulario a Django -->
+            <button type="submit" class="btn btn-verde" id="btn-guardar">
+            <i class="bi bi-bookmark-plus-fill" style="font-size: 1.5rem; color: white ; display: block; margin-bottom: 4px;"></i>
+                Guardar en base de datos
+            </button>
+
+        </div>
+
+    </form>
+</div>
+
+<!-- ── Modal de confirmación ────────────────────────── -->
+<div class="modal-overlay" id="modal">
+    <div class="modal">
+       <div class="icono">
+    <i class="bi bi-bookmark-plus" style="color:  #09b740;"></i>
+       </div>
+        <h2>¿Es correcta la información?</h2>
+        <p id="modal-texto"></p>
+        <div class="modal-btns">
+            <button class="btn btn-verde" onclick="confirmarSi()">✔ Sí</button>
+            <button class="btn btn-gris" onclick="confirmarNo()">✖ No</button>
+        </div>
+    </div>
+</div>
+
+<footer>
+    Pro-Gol Watch © 2026 — Backend con Python/Django
+</footer>
+
+<!-- ── JavaScript: validaciones y lógica de formulario ── -->
+<script>
+    // ── Funciones de validación ─────────────────────────
+
+    // Valida que el campo solo tenga letras y números
+    function esAlfanumerico(valor) {
+        return /^[A-Za-z0-9]+$/.test(valor);
+    }
+
+    // Valida que el campo solo tenga letras y espacios
+    function esSoloLetras(valor) {
+        return /^[A-Za-záéíóúÁÉÍÓÚñÑ\s]+$/.test(valor);
+    }
+
+    // Valida que el campo sea un número entero positivo
+    function esSoloNumeros(valor) {
+        return /^[0-9]+$/.test(valor) && parseInt(valor) > 0;
+    }
+
+    // Valida que el tamaño sea numérico y entre 0 y 3
+    function esTamanoValido(valor) {
+        const num = parseFloat(valor);
+        return !isNaN(num) && num > 0 && num <= 3;
+    }
+
+    // Valida alfanumérico con espacios (para títulos y nombres)
+    function esAlfanumericoEspacios(valor) {
+        return /^[A-Za-z0-9áéíóúÁÉÍÓÚñÑ\s]+$/.test(valor);
+    }
+
+    // ── Mostrar / ocultar mensaje de error por campo ────
+
+    function mostrarError(idCampo, idError, mostrar) {
+        const campo = document.getElementById(idCampo);
+        const error = document.getElementById(idError);
+        if (mostrar) {
+            campo.classList.add('error');
+            campo.classList.remove('valido');
+            error.classList.add('visible');
+        } else {
+            campo.classList.remove('error');
+            campo.classList.add('valido');
+            error.classList.remove('visible');
+        }
+    }
+
+    // ── Validar campos del usuario al salir del campo ──
+
+    document.getElementById('id_nomina').addEventListener('blur', function () {
+        const val = this.value.trim();
+        mostrarError('id_nomina', 'err_nomina', val === '' || !esAlfanumerico(val));
+    });
+
+    document.getElementById('nombre').addEventListener('blur', function () {
+        const val = this.value.trim();
+        mostrarError('nombre', 'err_nombre', val === '' || !esSoloLetras(val));
+    });
+
+    document.getElementById('cantidad').addEventListener('blur', function () {
+        const val = this.value.trim();
+        mostrarError('cantidad', 'err_cantidad', val === '' || !esSoloNumeros(val));
+    });
+
+    // ── Validar formulario antes de abrir el modal ──────
+
+    function validarUsuario() {
+        const nomina   = document.getElementById('id_nomina').value.trim();
+        const nombre   = document.getElementById('nombre').value.trim();
+        const cantidad = document.getElementById('cantidad').value.trim();
+
+        let valido = true;
+
+        if (!nomina || !esAlfanumerico(nomina)) {
+            mostrarError('id_nomina', 'err_nomina', true);
+            valido = false;
+        }
+        if (!nombre || !esSoloLetras(nombre)) {
+            mostrarError('nombre', 'err_nombre', true);
+            valido = false;
+        }
+        if (!cantidad || !esSoloNumeros(cantidad)) {
+            mostrarError('cantidad', 'err_cantidad', true);
+            valido = false;
+        }
+
+        return valido;
+    }
+
+    // ── Abrir modal de confirmación ─────────────────────
+
+    function abrirModal() {
+        if (!validarUsuario()) return;
+
+        const nomina   = document.getElementById('id_nomina').value.trim();
+        const nombre   = document.getElementById('nombre').value.trim();
+        const cantidad = document.getElementById('cantidad').value.trim();
+
+        // Llenar el texto del modal con los datos del usuario
+        document.getElementById('modal-texto').innerHTML =
+            `Bienvenido <strong>${nombre}</strong>, tu número de nómina es 
+             <strong>${nomina}</strong> y estás intentando subir 
+             <strong>${cantidad}</strong> video(s).`;
+
+        // Mostrar el modal
+        document.getElementById('modal').classList.add('visible');
+    }
+
+    // ── El usuario confirmó con "Sí" ────────────────────
+
+    function confirmarSi() {
+        document.getElementById('modal').classList.remove('visible');
+
+        const cantidad = parseInt(document.getElementById('cantidad').value);
+
+        // Generar dinámicamente los formularios de cada video
+        let html = '';
+        for (let i = 1; i <= cantidad; i++) {
+            html += `
+            <div class="card">
+                <h2><i class="bi bi-camera-video-fill" style="color: #7c3aed;"></i> Video #${i}</h2>
+                <div class="video-grid">
+                    <div class="form-group">
+                        <label>Título del video</label>
+                        <input type="text" name="titulo_${i}" id="titulo_${i}"
+                               placeholder="Ej: Partido final Copa">
+                        <span class="msg-error" id="err_titulo_${i}">
+                            Título en formato incorrecto. Solo números y letras.
+                        </span>
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre del video</label>
+                        <input type="text" name="nombre_video_${i}" id="nombre_video_${i}"
+                               placeholder="Ej: partido copa 2026">
+                        <span class="msg-error" id="err_nombre_video_${i}">
+                            Nombre en formato incorrecto. Solo números y letras.
+                        </span>
+                    </div>
+                    <div class="form-group">
+                        <label>Extensión</label>
+                        <input type="text" name="extension_${i}" id="extension_${i}"
+                               placeholder="Ej: mpg" maxlength="5">
+                        <span class="msg-error" id="err_extension_${i}">
+                            Extensión en formato incorrecto. Solo números y letras.
+                        </span>
+                    </div>
+                    <div class="form-group">
+                        <label>Tamaño en MB (máx. 3)</label>
+                        <input type="text" name="tamano_${i}" id="tamano_${i}"
+                               placeholder="Ej: 2.5">
+                        <span class="msg-error" id="err_tamano_${i}">
+                            El archivo no debe pesar más de 3 MB.
+                        </span>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // Insertar los formularios de videos y mostrar la sección
+        document.getElementById('contenedor-videos').innerHTML = html;
+        document.getElementById('seccion-videos').classList.add('visible');
+
+        // Agregar validaciones al salir de cada campo de video
+        for (let i = 1; i <= cantidad; i++) {
+            agregarValidacionesVideo(i);
+        }
+
+        // Hacer scroll hacia los videos
+        document.getElementById('seccion-videos').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ── El usuario eligió "No" ──────────────────────────
+
+    function confirmarNo() {
+        // Cerrar el modal y permitir editar los datos
+        document.getElementById('modal').classList.remove('visible');
+    }
+
+    // ── Validaciones para cada campo de video ───────────
+
+    function agregarValidacionesVideo(i) {
+
+        document.getElementById(`titulo_${i}`).addEventListener('blur', function () {
+            const val = this.value.trim();
+            mostrarError(`titulo_${i}`, `err_titulo_${i}`,
+                val === '' || !esAlfanumericoEspacios(val));
+        });
+
+        document.getElementById(`nombre_video_${i}`).addEventListener('blur', function () {
+            const val = this.value.trim();
+            mostrarError(`nombre_video_${i}`, `err_nombre_video_${i}`,
+                val === '' || !esAlfanumericoEspacios(val));
+        });
+
+        document.getElementById(`extension_${i}`).addEventListener('blur', function () {
+            const val = this.value.trim().replace('.', '');
+            mostrarError(`extension_${i}`, `err_extension_${i}`,
+                val === '' || !esAlfanumerico(val));
+        });
+
+        document.getElementById(`tamano_${i}`).addEventListener('blur', function () {
+            const val = this.value.trim();
+            mostrarError(`tamano_${i}`, `err_tamano_${i}`,
+                val === '' || !esTamanoValido(val));
+        });
+    }
+
+    // ── Validar todos los videos antes de guardar ───────
+
+    document.getElementById('formulario').addEventListener('submit', function (e) {
+        const cantidad = parseInt(document.getElementById('cantidad').value);
+        let valido = true;
+
+        for (let i = 1; i <= cantidad; i++) {
+            const titulo  = document.getElementById(`titulo_${i}`).value.trim();
+            const nombre  = document.getElementById(`nombre_video_${i}`).value.trim();
+            const ext     = document.getElementById(`extension_${i}`).value.trim().replace('.','');
+            const tamano  = document.getElementById(`tamano_${i}`).value.trim();
+
+            if (!titulo || !esAlfanumericoEspacios(titulo)) {
+                mostrarError(`titulo_${i}`, `err_titulo_${i}`, true); valido = false;
+            }
+            if (!nombre || !esAlfanumericoEspacios(nombre)) {
+                mostrarError(`nombre_video_${i}`, `err_nombre_video_${i}`, true); valido = false;
+            }
+            if (!ext || !esAlfanumerico(ext)) {
+                mostrarError(`extension_${i}`, `err_extension_${i}`, true); valido = false;
+            }
+            if (!tamano || !esTamanoValido(tamano)) {
+                mostrarError(`tamano_${i}`, `err_tamano_${i}`, true); valido = false;
+            }
+        }
+
+        // Si hay errores, cancelar el envío
+        if (!valido) e.preventDefault();
+    });
+</script>
+
+</body>
+</html>
